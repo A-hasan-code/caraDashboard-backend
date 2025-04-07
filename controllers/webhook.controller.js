@@ -24,7 +24,7 @@ exports.syncContact = async (req, res) => { // Pass res as a parameter
                 location_id: event.locationId || null,
                 contact_id: event.id || null,
                 name: `${event.firstName} ${event.lastName}` || null,
-                email: event.email.trim(),
+                email: event.email.trim() || null,
                 phone: event.phone || null,
                 address: event.address_1 || null,
                 profile_image: event.profilePhoto || null,
@@ -57,12 +57,23 @@ exports.syncContact = async (req, res) => { // Pass res as a parameter
                     // Validate custom field ID format
                     if (customField.id) {
                         const customFieldData = await customFieldModels.findOne({ cf_id: customField.id });
+                        let extractedUrls;
+
+                        if (typeof customField.value === "object" && customField.value !== null) {
+                            const urls = Object.values(customField.value)
+                                .filter(item => item && typeof item === "object" && item.url) // Ensure it's a valid object with a URL
+                                .map(item => item.url); // Extract URL values
+
+                            extractedUrls = urls.length === 1 ? urls[0] : urls; // Store single URL as string, multiple as array
+                        } else {
+                            extractedUrls = customField.value; // If not an object, store as is
+                        }
                         if (customFieldData) {
                             const customFieldEntry = new ContactCustomField({
                                 contact_id: newContact._id,
                                 user_id: user._id,
-                                custom_field_id: customField.id, 
-                                value: customField.value,
+                                custom_field_id: customFieldData._id,
+                                value: extractedUrls,
                             });
 
                             await customFieldEntry.save();
@@ -214,12 +225,23 @@ exports.syncContact = async (req, res) => { // Pass res as a parameter
                 for (const customField of event.customFields) {
                     if (customField.id) {
                         const customFieldData = await customFieldModels.findOne({ cf_id: customField.id });
+                        let extractedUrls;
 
+                        if (typeof customField.value === "object" && customField.value !== null) {
+                            const urls = Object.values(customField.value)
+                                .filter(item => item && typeof item === "object" && item.url) // Ensure it's a valid object with a URL
+                                .map(item => item.url); // Extract URL values
+
+                            extractedUrls = urls.length === 1 ? urls[0] : urls; // Store single URL as string, multiple as array
+                        } else {
+                            extractedUrls = customField.value; // If not an object, store as is
+                        }
+                        console.log('ye extracted haa', extractedUrls);
                         if (customFieldData) {
                             // Update or insert the custom field for the contact
                             const updateResult = await ContactCustomField.updateOne(
-                                { contact_id: contact._id, custom_field_id: customField.id },
-                                { value: customField.value },
+                                { contact_id: contact._id, custom_field_id: customFieldData._id },
+                                { value: extractedUrls },
                                 { upsert: true }
                             );
 
@@ -232,9 +254,10 @@ exports.syncContact = async (req, res) => { // Pass res as a parameter
 
                         // If no custom field found, create a new custom field entry
                         const newCustomField = new ContactCustomField({
+                            user_id: user._id,
                             contact_id: contact._id,
                             custom_field_id: customField.id,
-                            value: customField.value,
+                            value: extractedUrls,
                         });
 
                         await newCustomField.save();

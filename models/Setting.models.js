@@ -5,7 +5,7 @@ const { Schema } = mongoose;
 
 const settingsSchema = new Schema({
     user_id: {
-        type:mongoose.Schema.Types.ObjectId, 
+        type: String, 
         ref: 'User',
         required: true,
     },

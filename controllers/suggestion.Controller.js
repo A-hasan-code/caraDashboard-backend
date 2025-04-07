@@ -1,7 +1,5 @@
-const Customfields = require('../models/ContactCutsomField.models');
+const Customfields = require('../models/customFields.models');
 const Tag = require("../models/tag");
-
-
 
 exports.getSuggestion = async (req, res) => {
     const searchTerm = req.query.q?.trim(); // Trim spaces
@@ -13,37 +11,37 @@ exports.getSuggestion = async (req, res) => {
     try {
         console.log(`Searching for: "${searchTerm}"`);
 
-        // Fetch matching tags (Case-insensitive & partial match)
+        // Create the search regex for case-insensitive partial matching
         const searchRegex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-        console.log(searchRegex)
-        const tags = await Tag.find({ name: searchRegex }).limit(5);
+        console.log(`Search Regex: ${searchRegex}`);
 
+        // Fetch matching tags (case-insensitive & partial match)
+        const tags = await Tag.find({ name: searchRegex }).limit(5);
         console.log(`Tags Found:`, tags);
 
-       
+        // Fetch matching custom fields (case-insensitive & partial match)
         const customFields = await Customfields.find({
-            cf_name: searchTerm,
+            cf_name: searchRegex,
         }).limit(5);
-
         console.log(`Custom Fields Found:`, customFields);
 
-        // Combine both results into one object
-        const response = {
-            tags: tags.map(tag => tag.name),
-            customFields: customFields.map(field => field.cf_name),
-        };
+        // Ensure that tags and customFields are always arrays, even if no results were found
+        const combinedResults = [
+            ...(tags || []).map(tag => tag.name), // Use an empty array if tags is undefined
+            ...(customFields || []).map(field => field.cf_name) // Use an empty array if customFields is undefined
+        ];
 
-        // Check if either tags or customFields has results
-        if (response.tags.length === 0 && response.customFields.length === 0) {
+        // If there are no results for both tags and customFields
+        if (combinedResults.length === 0) {
             return res.status(404).json({ message: 'No matching data found' });
         }
 
-        // Send combined results
-        res.json(response);
+        // Send the combined results in the response
+        return res.json({ suggestions: combinedResults });
 
     } catch (error) {
         console.error('Error fetching search suggestions:', error);
-        res.status(500).json({ message: 'Error fetching search suggestions' });
+        return res.status(500).json({ message: 'Error fetching search suggestions', error: error.message });
     }
 };
 
